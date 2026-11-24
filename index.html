@@ -11,12 +11,23 @@
 <body>
   <div class="hud-container">
     <header id="main-header" class="jrpg-header">
-      <h1>PARTY STATUS</h1>
-      <button id="btn-add-char" class="jrpg-btn" title="Adicionar Personagem">+ Herói</button>
+      <h1>FABULA HUD</h1>
+      <div class="header-actions">
+        <button id="btn-add-clock" class="jrpg-btn clock-btn" title="Criar Relógio no Mapa">+ Clock</button>
+        <button id="btn-add-char" class="jrpg-btn" title="Adicionar Personagem">+ Herói</button>
+      </div>
     </header>
 
     <!-- Lista de personagens (ou card único no modo Token) -->
     <main id="party-list" class="party-list"></main>
+
+    <!-- Seção de Relógios Ativos no Mapa (oculta no modo Token) -->
+    <section id="clocks-section" class="clocks-section">
+      <div class="section-divider">
+        <span>RELÓGIOS NO MAPA</span>
+      </div>
+      <div id="clocks-list" class="clocks-list"></div>
+    </section>
   </div>
 
   <!-- Modal para criar/editar personagem -->
@@ -80,11 +91,43 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js"></script>
-</body>
-</html>
+  <!-- Modal para criar novo Relógio (Clock) no Mapa -->
+  <dialog id="clock-modal" class="jrpg-modal">
+    <form id="clock-form" method="dialog">
+      <h2>Novo Relógio de Progresso</h2>
+      
+      <label>Título do Relógio
+        <input type="text" id="clock-name" required placeholder="Ex: Ritual do Vilão" maxlength="26" />
+      </label>
 
-  <!-- SDK Oficial do Owlbear Rodeo via ES Module -->
+      <div class="grid-2">
+        <label>Segmentos
+          <select id="clock-segments">
+            <option value="4">4 Segmentos</option>
+            <option value="6" selected>6 Segmentos</option>
+            <option value="8">8 Segmentos</option>
+            <option value="10">10 Segmentos</option>
+            <option value="12">12 Segmentos</option>
+          </select>
+        </label>
+
+        <label>Tema / Cor
+          <select id="clock-color">
+            <option value="#e2c07d">Dourado (Objetivo)</option>
+            <option value="#e74c3c">Carmesim (Perigo)</option>
+            <option value="#3498db">Safira (Magia)</option>
+            <option value="#2ecc71">Esmeralda (Aliados)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-cancel-clock" class="jrpg-btn secondary">Cancelar</button>
+        <button type="submit" class="jrpg-btn">Colocar no Mapa</button>
+      </div>
+    </form>
+  </dialog>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>
