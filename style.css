@@ -287,3 +287,22 @@ body {
   gap: 8px;
   margin-top: 10px;
 }
+/* Estilo do seletor no modal de vínculo */
+.jrpg-modal select {
+  background: #050b21;
+  border: 1px solid #3c5496;
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-family: 'Nunito', sans-serif;
+}
+
+/* Ajustes quando aberto em janela flutuante de Token */
+body.token-mode {
+  padding: 4px;
+  background: transparent;
+}
+
+body.token-mode #main-header {
+  display: none;
+}
