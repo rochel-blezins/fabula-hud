@@ -6,7 +6,7 @@ const POPOVER_ID = "fabula-ultima-hud/token-popover";
 const BASE_URL = "https://rochel-blezins.github.io/fabula-hud/index.html";
 const DEFAULT_AVATAR = "https://placehold.co/150x180/101b3d/e2c07d?text=Hero";
 
-// Verifica se a página foi aberta em modo "Janela de Token" (?charId=...)
+// Detecta se está no modo janela individual de token (?charId=...)
 const urlParams = new URLSearchParams(window.location.search);
 const focusedCharId = urlParams.get("charId");
 
@@ -15,6 +15,7 @@ if (focusedCharId) {
 }
 
 let partyData = [];
+let currentOpenCharId = null;
 
 // Elementos DOM
 const partyListEl = document.getElementById("party-list");
@@ -33,22 +34,22 @@ OBR.onReady(async () => {
   partyData = metadata[METADATA_KEY] || [];
   renderParty();
 
-  // Sincronização em tempo real entre a HUD Geral e as Janelas de Token
+  // Sincronização em tempo real entre a HUD Geral e a Janela Flutuante
   OBR.room.onMetadataChange((newMetadata) => {
     partyData = newMetadata[METADATA_KEY] || [];
     renderParty();
   });
 
-  // Só registra os menus de contexto na instância principal (para não duplicar)
+  // Registra os menus e listeners apenas na instância principal
   if (!focusedCharId) {
     setupContextMenus();
     setupSelectionListener();
   }
 });
 
-// Cria os botões ao clicar com o botão direito em qualquer token no mapa
+// Cria os botões no menu de contexto dos tokens
 function setupContextMenus() {
-  // 1. Botão para abrir o Status JRPG flutuante do token
+  // 1. Abrir manualmente a janela JRPG do token
   OBR.contextMenu.create({
     id: "fabula-ultima-hud/open-status",
     icons: [
@@ -72,7 +73,7 @@ function setupContextMenus() {
     },
   });
 
-  // 2. Botão para vincular o token a um herói da party
+  // 2. Vincular o token a um herói da party
   OBR.contextMenu.create({
     id: "fabula-ultima-hud/link-hero",
     icons: [
@@ -91,8 +92,7 @@ function setupContextMenus() {
   });
 }
 
-let currentOpenCharId = null;
-
+// Abre a janela flutuante ao selecionar o token, sem piscar ou fechar ao movê-lo
 function setupSelectionListener() {
   OBR.player.onChange(async (player) => {
     const selection = player.selection;
@@ -110,6 +110,7 @@ function setupSelectionListener() {
   });
 }
 
+// Abre o Popover na parte inferior central da tela sem bloquear o mapa
 async function openTokenPopover(token, charId) {
   const viewportWidth = await OBR.viewport.getWidth();
   const viewportHeight = await OBR.viewport.getHeight();
@@ -132,13 +133,12 @@ async function openTokenPopover(token, charId) {
   });
 }
 
-// Fecha a janela flutuante e limpa o estado para permitir reabrir depois
+// Fecha a janela flutuante pelo botão "✕"
 window.closeTokenPopover = async () => {
   await OBR.popover.close(POPOVER_ID);
 };
 
-
-// Abre modal dentro da HUD principal para escolher qual herói pertence ao token
+// Abre modal para vincular token a um personagem
 async function openLinkModal(token) {
   if (partyData.length === 0) {
     await OBR.notification.show("Crie um herói na HUD Party Status antes de vincular!", "WARNING");
@@ -150,7 +150,6 @@ async function openLinkModal(token) {
     .map((c) => `<option value="${c.id}">${c.name}</option>`)
     .join("");
 
-  // Abre a janela principal caso esteja fechada e exibe o modal
   await OBR.action.open();
   linkModal.showModal();
 }
@@ -172,7 +171,7 @@ linkForm.addEventListener("submit", async (e) => {
   await OBR.notification.show("Token vinculado com sucesso!", "SUCCESS");
 });
 
-// Salva estado na sala
+// Salva estado na sala do Owlbear
 async function saveParty(newParty) {
   partyData = newParty;
   renderParty();
@@ -181,6 +180,7 @@ async function saveParty(newParty) {
   });
 }
 
+// Ajusta PV, PM, PI ou Pontos de Fabula
 window.adjustStat = (id, field, delta) => {
   const updated = partyData.map((char) => {
     if (char.id !== id) return char;
@@ -196,6 +196,7 @@ window.adjustStat = (id, field, delta) => {
   saveParty(updated);
 };
 
+// Abre modal de edição do personagem
 window.editChar = (id) => {
   const char = partyData.find((c) => c.id === id);
   if (!char) return;
@@ -214,6 +215,7 @@ window.editChar = (id) => {
   modal.showModal();
 };
 
+// Remove personagem da party
 window.deleteChar = (id) => {
   if (!confirm("Remover este personagem da HUD?")) return;
   const updated = partyData.filter((c) => c.id !== id);
@@ -272,8 +274,8 @@ form.addEventListener("submit", (e) => {
   modal.close();
 });
 
+// Renderiza a interface JRPG
 function renderParty() {
-  // Se estiver no modo Token, filtra para mostrar APENAS o personagem daquele token
   const listToRender = focusedCharId
     ? partyData.filter((c) => c.id === focusedCharId)
     : partyData;
@@ -315,7 +317,9 @@ function renderParty() {
                     : `<button class="icon-btn" onclick="deleteChar('${c.id}')" title="Remover">✕</button>`
                 }
               </div>
+            </div>
 
+            <!-- Barra de PV -->
             <div class="bar-row">
               <div class="bar-label">
                 <span style="color: ${isCrisis ? "#ff6b6b" : "#2ecc71"}">PV ${c.hp} / ${c.hpMax}</span>
@@ -331,6 +335,7 @@ function renderParty() {
               </div>
             </div>
 
+            <!-- Barra de PM -->
             <div class="bar-row">
               <div class="bar-label">
                 <span style="color: #5dade2">PM ${c.mp} / ${c.mpMax}</span>
@@ -346,6 +351,7 @@ function renderParty() {
               </div>
             </div>
 
+            <!-- PI e Pontos de Fabula -->
             <div class="bottom-resources">
               <div class="res-pill">
                 <span style="color: var(--ip-color)">PI: ${c.ip}/${c.ipMax}</span>
