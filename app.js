@@ -95,7 +95,10 @@ function setupContextMenus() {
 function setupSelectionListener() {
   OBR.player.onChange(async (player) => {
     const selection = player.selection;
-    if (!selection || selection.length !== 1) return;
+    if (!selection || selection.length !== 1) {
+      await OBR.popover.close(POPOVER_ID);
+      return;
+    }
 
     const items = await OBR.scene.items.getItems([selection[0]]);
     if (items.length === 0) return;
@@ -104,29 +107,35 @@ function setupSelectionListener() {
     const charId = token.metadata?.[TOKEN_LINK_KEY];
     if (charId) {
       openTokenPopover(token, charId);
+    } else {
+      await OBR.popover.close(POPOVER_ID);
     }
   });
 }
 
-// Abre o Popover ancorado ao token no mapa
-// Abre o Popover calculando a posição exata do token na tela
+// Abre o Popover ancorado exatamente ao lado do token no mapa
 async function openTokenPopover(token, charId) {
-  // Pega os limites do token no mundo do mapa
+  // 1. Pega os limites do token no mapa e a posição/zoom atuais da câmera
   const bounds = await OBR.scene.items.getItemBounds([token.id]);
-  // Converte a borda direita/centro do token para pixels da tela do navegador
-  const screenPos = await OBR.viewport.transformPoint({
-    x: bounds.max.x,
-    y: bounds.center.y,
-  });
+  const scale = await OBR.viewport.getScale();
+  const position = await OBR.viewport.getPosition();
 
+  // 2. Converte a borda direita e o centro vertical do token para pixels da tela
+  const screenX = bounds.max.x * scale + position.x;
+  const screenY = bounds.center.y * scale + position.y;
+
+  // 3. Fecha o anterior (se já houver um aberto) para atualizar a posição suavemente
+  await OBR.popover.close(POPOVER_ID);
+
+  // 4. Abre colado à direita do token
   await OBR.popover.open({
     id: POPOVER_ID,
     url: `${BASE_URL}?charId=${charId}`,
     height: 155,
     width: 365,
     anchorPosition: {
-      left: Math.round(screenPos.x) + 12,
-      top: Math.round(screenPos.y),
+      left: Math.round(screenX) + 14,
+      top: Math.round(screenY),
     },
     anchorOrigin: { horizontal: "LEFT", vertical: "CENTER" },
     transformOrigin: { horizontal: "LEFT", vertical: "CENTER" },
