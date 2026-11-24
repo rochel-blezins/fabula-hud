@@ -92,48 +92,54 @@ function setupContextMenus() {
 }
 
 // Abre a janela flutuante automaticamente ao clicar/selecionar um token vinculado!
+let currentOpenCharId = null;
+
+// Abre a janela flutuante ao selecionar o token, sem reiniciar se já estiver aberta para ele
 function setupSelectionListener() {
   OBR.player.onChange(async (player) => {
     const selection = player.selection;
-    if (!selection || selection.length !== 1) {
-      await OBR.popover.close(POPOVER_ID);
-      return;
-    }
+    if (!selection || selection.length !== 1) return;
 
     const items = await OBR.scene.items.getItems([selection[0]]);
     if (items.length === 0) return;
 
     const token = items[0];
     const charId = token.metadata?.[TOKEN_LINK_KEY];
-    if (charId) {
+
+    // Se clicar em um token vinculado diferente do atual (ou se estiver fechado), abre
+    if (charId && charId !== currentOpenCharId) {
       openTokenPopover(token, charId);
-    } else {
-      await OBR.popover.close(POPOVER_ID);
     }
   });
 }
 
-// Abre o Popover centralizado na parte inferior da tela (estilo HUD de combate JRPG)
+// Abre o Popover sem bloquear cliques no mapa (permite mover o token livremente)
 async function openTokenPopover(token, charId) {
   const viewportWidth = await OBR.viewport.getWidth();
   const viewportHeight = await OBR.viewport.getHeight();
 
-  await OBR.popover.close(POPOVER_ID);
+  currentOpenCharId = charId;
 
   await OBR.popover.open({
     id: POPOVER_ID,
     url: `${BASE_URL}?charId=${charId}`,
     height: 155,
     width: 365,
+    disableClickAway: true, // Permite clicar e arrastar tokens no mapa sem fechar a HUD
     anchorPosition: {
       left: Math.round(viewportWidth / 2),
-      top: Math.round(viewportHeight - 82), // Fica logo acima da dock inferior do Owlbear
+      top: Math.round(viewportHeight - 82),
     },
     anchorOrigin: { horizontal: "CENTER", vertical: "BOTTOM" },
     transformOrigin: { horizontal: "CENTER", vertical: "BOTTOM" },
     marginThreshold: 16,
   });
 }
+
+// Função para fechar a janela flutuante pelo botão "✕" do card
+window.closeTokenPopover = async () => {
+  await OBR.popover.close(POPOVER_ID);
+};
 
 
 // Abre modal dentro da HUD principal para escolher qual herói pertence ao token
