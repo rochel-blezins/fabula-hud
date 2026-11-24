@@ -91,10 +91,8 @@ function setupContextMenus() {
   });
 }
 
-// Abre a janela flutuante automaticamente ao clicar/selecionar um token vinculado!
 let currentOpenCharId = null;
 
-// Abre a janela flutuante ao selecionar o token, sem reiniciar se já estiver aberta para ele
 function setupSelectionListener() {
   OBR.player.onChange(async (player) => {
     const selection = player.selection;
@@ -106,14 +104,12 @@ function setupSelectionListener() {
     const token = items[0];
     const charId = token.metadata?.[TOKEN_LINK_KEY];
 
-    // Se clicar em um token vinculado diferente do atual (ou se estiver fechado), abre
     if (charId && charId !== currentOpenCharId) {
       openTokenPopover(token, charId);
     }
   });
 }
 
-// Abre o Popover sem bloquear cliques no mapa (permite mover o token livremente)
 async function openTokenPopover(token, charId) {
   const viewportWidth = await OBR.viewport.getWidth();
   const viewportHeight = await OBR.viewport.getHeight();
@@ -125,7 +121,7 @@ async function openTokenPopover(token, charId) {
     url: `${BASE_URL}?charId=${charId}`,
     height: 155,
     width: 365,
-    disableClickAway: true, // Permite clicar e arrastar tokens no mapa sem fechar a HUD
+    disableClickAway: true,
     anchorPosition: {
       left: Math.round(viewportWidth / 2),
       top: Math.round(viewportHeight - 82),
@@ -136,7 +132,7 @@ async function openTokenPopover(token, charId) {
   });
 }
 
-// Função para fechar a janela flutuante pelo botão "✕" do card
+// Fecha a janela flutuante e limpa o estado para permitir reabrir depois
 window.closeTokenPopover = async () => {
   await OBR.popover.close(POPOVER_ID);
 };
