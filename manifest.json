@@ -4,8 +4,8 @@
   "manifest_version": 1,
   "description": "HUD estilo JRPG para acompanhar PV, PM, PI, Defesas e Pontos de Fabula.",
   "action": {
-    "title": "Party Status (Fabula Ultima)",
-    "icon": "/icon.svg",
+"icon": "https://rochel-blezins.github.io/fabula-hud/icon.svg",
+    "popover": "https://rochel-blezins.github.io/fabula-hud/index.html",
     "popover": "/",
     "height": 600,
     "width": 380
