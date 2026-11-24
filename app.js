@@ -1,4 +1,8 @@
-import OBR from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
+import OBR, {
+  buildShape,
+  buildLine,
+  buildText,
+} from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
 
 const METADATA_KEY = "fabula-ultima-hud/party";
 const TOKEN_LINK_KEY = "fabula-ultima-hud/linked-char-id";
@@ -60,10 +64,9 @@ OBR.onReady(async () => {
 });
 
 /* ==========================================================================
-   SISTEMA DE RELÓGIOS (CLOCKS) NATIVOS NO MAPA
+   SISTEMA DE RELÓGIOS (CLOCKS) NATIVOS COM BUILDERS OFICIAIS DO SDK
    ========================================================================== */
 
-// Miniatura SVG para exibir na lista lateral da HUD
 function buildMiniClockSvg(current, total, fillColor) {
   const cx = 30;
   const cy = 30;
@@ -92,31 +95,6 @@ function buildMiniClockSvg(current, total, fillColor) {
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
-// Constrói fatias usando apenas MOVE (0), LINE (1) e CLOSE (3) — 100% compatível com o Owlbear!
-function buildPolygonSlices(cx, cy, r, total, startIndex, endIndex) {
-  const cmds = [];
-  const arcSteps = 14; // Suavidade da curva de cada fatia
-
-  for (let i = startIndex; i < endIndex; i++) {
-    const startAngle = (i * 360) / total - 90;
-    const endAngle = ((i + 1) * 360) / total - 90;
-
-    cmds.push([0, cx, cy]); // MOVE para o centro
-
-    for (let s = 0; s <= arcSteps; s++) {
-      const angle = startAngle + ((endAngle - startAngle) * s) / arcSteps;
-      const rad = (angle * Math.PI) / 180;
-      const px = cx + r * Math.cos(rad);
-      const py = cy + r * Math.sin(rad);
-      cmds.push([1, px, py]); // LINE ao longo da borda
-    }
-
-    cmds.push([3]); // CLOSE fatia
-  }
-  return cmds;
-}
-
-// Monitora todos os relógios existentes na cena atual
 async function setupClockSync() {
   const isReady = await OBR.scene.isReady();
   if (isReady) {
@@ -146,7 +124,7 @@ async function setupClockSync() {
   });
 }
 
-// Cria um Clock composto por Círculo Nativo + Fatias + Texto anexados
+// Cria um Clock no mapa usando buildShape + buildLine + buildText
 async function createMapClock(title, total, color) {
   const ready = await OBR.scene.isReady();
   if (!ready) {
@@ -158,158 +136,130 @@ async function createMapClock(title, total, color) {
   const viewportHeight = await OBR.viewport.getHeight();
   const scale = await OBR.viewport.getScale();
   const pos = await OBR.viewport.getPosition();
-  const playerId = await OBR.player.getId();
 
   const offset = (sceneClocks.length % 4) * 40;
   const worldX = (viewportWidth / 2 - pos.x) / scale + offset;
   const worldY = (viewportHeight / 2 - pos.y) / scale + offset;
 
-  const baseId = crypto.randomUUID();
-  const gridLinesId = crypto.randomUUID();
-  const fillId = crypto.randomUUID();
-  const labelId = crypto.randomUUID();
-  const r = 72;
-  const now = new Date().toISOString();
+  const r = 70;
 
-  const commonProps = {
-    rotation: 0,
-    scale: { x: 1, y: 1 },
-    visible: true,
-    locked: false,
-    layer: "PROP",
-    createdUserId: playerId,
-    lastModified: now,
-    lastModifiedUserId: playerId,
-  };
+  // 1. Círculo principal (construído com buildShape oficial)
+  const baseCircle = buildShape()
+    .shapeType("CIRCLE")
+    .width(r * 2)
+    .height(r * 2)
+    .position({ x: worldX, y: worldY })
+    .fillColor("#081230")
+    .fillOpacity(0.96)
+    .strokeColor("#e2c07d")
+    .strokeWidth(4)
+    .layer("PROP")
+    .name(`Clock: ${title}`)
+    .build();
 
-  // 1. Círculo principal (SHAPE nativo do Owlbear — sempre renderiza!)
-  const baseCircle = {
-    ...commonProps,
-    id: baseId,
-    type: "SHAPE",
-    shapeType: "CIRCLE",
-    name: `Clock: ${title}`,
-    position: { x: worldX, y: worldY },
-    width: r * 2,
-    height: r * 2,
-    zIndex: Date.now(),
-    style: {
-      fillColor: "#081230",
-      fillOpacity: 0.96,
-      strokeColor: "#e2c07d",
-      strokeOpacity: 1,
-      strokeWidth: 4,
-      strokeDash: [],
-    },
-    metadata: {
-      [CLOCK_PART_KEY]: "BASE",
-      [CLOCK_META_KEY]: {
-        title,
-        current: 0,
-        total,
-        color,
-        fillId,
-        gridLinesId,
-        labelId,
-      },
-    },
-  };
+  const baseId = baseCircle.id;
+  const lineIds = [];
+  const wedgeIds = [];
+  const itemsToAdd = [baseCircle];
 
-  // 2. Fatias preenchidas (PATH poligonal anexado ao círculo)
-  const fillShape = {
-    ...commonProps,
-    id: fillId,
-    type: "PATH",
-    name: `Clock Fill: ${title}`,
-    position: { x: worldX, y: worldY },
-    attachedTo: baseId,
-    disableAttachmentBehavior: ["ROTATION"],
-    zIndex: Date.now() + 1,
-    commands: [],
-    fillRule: "NONZERO",
-    style: {
-      fillColor: color,
-      fillOpacity: 0.95,
-      strokeColor: "#e2c07d",
-      strokeOpacity: 1,
-      strokeWidth: 3,
-      strokeDash: [],
-    },
-    metadata: {
-      [CLOCK_PART_KEY]: "FILL",
-      parentClockId: baseId,
-    },
-  };
+  // 2. Fatias preenchidas (triângulos/setores individuais anexados ao círculo)
+  for (let i = 0; i < total; i++) {
+    const startAngle = (i * 360) / total - 90;
+    const endAngle = ((i + 1) * 360) / total - 90;
+    const midAngle = (startAngle + endAngle) / 2;
 
-  // 3. Linhas divisórias das fatias vazias (PATH poligonal anexado ao círculo)
-  const gridLinesShape = {
-    ...commonProps,
-    id: gridLinesId,
-    type: "PATH",
-    name: `Clock Grid: ${title}`,
-    position: { x: worldX, y: worldY },
-    attachedTo: baseId,
-    disableAttachmentBehavior: ["ROTATION"],
-    zIndex: Date.now() + 2,
-    commands: buildPolygonSlices(0, 0, r, total, 0, total),
-    fillRule: "NONZERO",
-    style: {
-      fillColor: "#000000",
-      fillOpacity: 0,
-      strokeColor: "#e2c07d",
-      strokeOpacity: 0.85,
-      strokeWidth: 2.5,
-      strokeDash: [],
-    },
-    metadata: {
-      [CLOCK_PART_KEY]: "GRID",
-      parentClockId: baseId,
-    },
-  };
+    const startRad = (startAngle * Math.PI) / 180;
+    const midRad = (midAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
 
-  // 4. Texto abaixo do círculo (anexado ao círculo)
-  const labelItem = {
-    ...commonProps,
-    id: labelId,
-    type: "TEXT",
-    name: `Clock Label: ${title}`,
-    position: { x: worldX - 110, y: worldY + r + 8 },
-    attachedTo: baseId,
-    disableAttachmentBehavior: ["ROTATION"],
-    zIndex: Date.now() + 3,
-    text: {
-      richText: [
-        {
-          type: "paragraph",
-          children: [{ text: `${title} (0/${total})` }],
-        },
-      ],
-      plainText: `${title} (0/${total})`,
-      style: {
-        fillColor: "#ffffff",
-        fillOpacity: 1,
-        strokeColor: "#050b21",
-        strokeOpacity: 1,
-        strokeWidth: 4,
-        textAlign: "CENTER",
-        textAlignVertical: "TOP",
-        fontFamily: "Cinzel",
-        fontSize: 18,
-        fontWeight: 700,
-        lineHeight: 1.2,
-        padding: 4,
-      },
-      type: "PLAIN",
-      width: 220,
-      height: 60,
-    },
-    metadata: {
+    // Cria cada fatia como um shape poligonal preenchido (invisível até ser ativado)
+    const wedge = buildShape()
+      .shapeType("TRIANGLE")
+      .width(r * 0.85)
+      .height(r * 0.85)
+      .position({
+        x: worldX + Math.cos(midRad) * (r * 0.48),
+        y: worldY + Math.sin(midRad) * (r * 0.48),
+      })
+      .rotation(midAngle + 90)
+      .fillColor(color)
+      .fillOpacity(0.95)
+      .strokeWidth(0)
+      .visible(false)
+      .attachedTo(baseId)
+      .disableAttachmentBehavior(["ROTATION"])
+      .layer("PROP")
+      .metadata({
+        [CLOCK_PART_KEY]: "WEDGE",
+        parentClockId: baseId,
+        sliceIndex: i,
+      })
+      .build();
+
+    wedgeIds.push(wedge.id);
+    itemsToAdd.push(wedge);
+
+    // 3. Linhas divisórias radiais do centro até a borda do círculo
+    const spoke = buildLine()
+      .startPosition({ x: worldX, y: worldY })
+      .endPosition({
+        x: worldX + Math.cos(startRad) * r,
+        y: worldY + Math.sin(startRad) * r,
+      })
+      .strokeColor("#e2c07d")
+      .strokeWidth(3)
+      .attachedTo(baseId)
+      .disableAttachmentBehavior(["ROTATION"])
+      .layer("PROP")
+      .metadata({
+        [CLOCK_PART_KEY]: "LINE",
+        parentClockId: baseId,
+      })
+      .build();
+
+    lineIds.push(spoke.id);
+    itemsToAdd.push(spoke);
+  }
+
+  // 4. Texto abaixo do círculo anexado ao relógio
+  const labelItem = buildText()
+    .plainText(`${title} (0/${total})`)
+    .position({ x: worldX - 110, y: worldY + r + 8 })
+    .width(220)
+    .height(50)
+    .fontSize(18)
+    .fontFamily("Cinzel")
+    .fontWeight(700)
+    .textAlign("CENTER")
+    .fillColor("#ffffff")
+    .strokeColor("#050b21")
+    .strokeWidth(4)
+    .attachedTo(baseId)
+    .disableAttachmentBehavior(["ROTATION"])
+    .layer("PROP")
+    .metadata({
       [CLOCK_PART_KEY]: "LABEL",
       parentClockId: baseId,
+    })
+    .build();
+
+  itemsToAdd.push(labelItem);
+
+  // Salva referências das partes no metadata da base
+  baseCircle.metadata = {
+    [CLOCK_PART_KEY]: "BASE",
+    [CLOCK_META_KEY]: {
+      title,
+      current: 0,
+      total,
+      color,
+      wedgeIds,
+      lineIds,
+      labelId: labelItem.id,
     },
   };
 
-  await OBR.scene.items.addItems([baseCircle, fillShape, gridLinesShape, labelItem]);
+  await OBR.scene.items.addItems(itemsToAdd);
   await OBR.notification.show(`Relógio "${title}" criado no mapa!`, "SUCCESS");
 }
 
@@ -323,26 +273,23 @@ window.adjustClock = async (baseId, delta) => {
   if (!data) return;
 
   const nextVal = Math.max(0, Math.min(data.total, data.current + delta));
-  const r = 72;
   const newLabelText = `${data.title} (${nextVal}/${data.total})`;
+  const idsToUpdate = [baseId, data.labelId, ...(data.wedgeIds || [])];
 
-  await OBR.scene.items.updateItems(
-    [baseId, data.fillId, data.labelId],
-    (items) => {
-      for (const item of items) {
-        if (item.id === baseId) {
-          item.metadata[CLOCK_META_KEY].current = nextVal;
-        } else if (item.id === data.fillId) {
-          item.commands = buildPolygonSlices(0, 0, r, data.total, 0, nextVal);
-        } else if (item.id === data.labelId) {
-          item.text.plainText = newLabelText;
-          item.text.richText = [
-            { type: "paragraph", children: [{ text: newLabelText }] },
-          ];
-        }
+  await OBR.scene.items.updateItems(idsToUpdate, (items) => {
+    for (const item of items) {
+      if (item.id === baseId) {
+        item.metadata[CLOCK_META_KEY].current = nextVal;
+      } else if (item.id === data.labelId) {
+        item.text.plainText = newLabelText;
+        item.text.richText = [
+          { type: "paragraph", children: [{ text: newLabelText }] },
+        ];
+      } else if (item.metadata?.[CLOCK_PART_KEY] === "WEDGE") {
+        item.visible = item.metadata.sliceIndex < nextVal;
       }
     }
-  );
+  });
 };
 
 // Remove um Clock inteiro do mapa
@@ -351,10 +298,12 @@ window.deleteClock = async (baseId) => {
   if (baseItems.length === 0) return;
 
   const data = baseItems[0].metadata?.[CLOCK_META_KEY];
-  const idsToDelete = [baseId];
-  if (data?.fillId) idsToDelete.push(data.fillId);
-  if (data?.gridLinesId) idsToDelete.push(data.gridLinesId);
-  if (data?.labelId) idsToDelete.push(data.labelId);
+  const idsToDelete = [
+    baseId,
+    data?.labelId,
+    ...(data?.wedgeIds || []),
+    ...(data?.lineIds || []),
+  ].filter(Boolean);
 
   await OBR.scene.items.deleteItems(idsToDelete);
 };
@@ -526,7 +475,7 @@ async function openTokenPopover(token, charId) {
 
   await OBR.popover.open({
     id: POPOVER_ID,
-    url: `${BASE_URL}?charId=${charId}&v=6`,
+    url: `${BASE_URL}?charId=${charId}&v=7`,
     height: 155,
     width: 365,
     disableClickAway: true,
@@ -774,5 +723,3 @@ function renderParty() {
     .join("");
 }
     })
-    .join("");
-}
