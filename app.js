@@ -113,35 +113,28 @@ function setupSelectionListener() {
   });
 }
 
-// Abre o Popover ancorado exatamente ao lado do token no mapa
+// Abre o Popover centralizado na parte inferior da tela (estilo HUD de combate JRPG)
 async function openTokenPopover(token, charId) {
-  // 1. Pega os limites do token no mapa e a posição/zoom atuais da câmera
-  const bounds = await OBR.scene.items.getItemBounds([token.id]);
-  const scale = await OBR.viewport.getScale();
-  const position = await OBR.viewport.getPosition();
+  const viewportWidth = await OBR.viewport.getWidth();
+  const viewportHeight = await OBR.viewport.getHeight();
 
-  // 2. Converte a borda direita e o centro vertical do token para pixels da tela
-  const screenX = bounds.max.x * scale + position.x;
-  const screenY = bounds.center.y * scale + position.y;
-
-  // 3. Fecha o anterior (se já houver um aberto) para atualizar a posição suavemente
   await OBR.popover.close(POPOVER_ID);
 
-  // 4. Abre colado à direita do token
   await OBR.popover.open({
     id: POPOVER_ID,
     url: `${BASE_URL}?charId=${charId}`,
     height: 155,
     width: 365,
     anchorPosition: {
-      left: Math.round(screenX) + 14,
-      top: Math.round(screenY),
+      left: Math.round(viewportWidth / 2),
+      top: Math.round(viewportHeight - 82), // Fica logo acima da dock inferior do Owlbear
     },
-    anchorOrigin: { horizontal: "LEFT", vertical: "CENTER" },
-    transformOrigin: { horizontal: "LEFT", vertical: "CENTER" },
+    anchorOrigin: { horizontal: "CENTER", vertical: "BOTTOM" },
+    transformOrigin: { horizontal: "CENTER", vertical: "BOTTOM" },
     marginThreshold: 16,
   });
 }
+
 
 // Abre modal dentro da HUD principal para escolher qual herói pertence ao token
 async function openLinkModal(token) {
