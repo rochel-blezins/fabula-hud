@@ -109,14 +109,26 @@ function setupSelectionListener() {
 }
 
 // Abre o Popover ancorado ao token no mapa
+// Abre o Popover calculando a posição exata do token na tela
 async function openTokenPopover(token, charId) {
+  // Pega os limites do token no mundo do mapa
+  const bounds = await OBR.scene.items.getItemBounds([token.id]);
+  // Converte a borda direita/centro do token para pixels da tela do navegador
+  const screenPos = await OBR.viewport.transformPoint({
+    x: bounds.max.x,
+    y: bounds.center.y,
+  });
+
   await OBR.popover.open({
     id: POPOVER_ID,
     url: `${BASE_URL}?charId=${charId}`,
     height: 155,
     width: 365,
-    anchorItemId: token.id,
-    anchorOrigin: { horizontal: "RIGHT", vertical: "CENTER" },
+    anchorPosition: {
+      left: Math.round(screenPos.x) + 12,
+      top: Math.round(screenPos.y),
+    },
+    anchorOrigin: { horizontal: "LEFT", vertical: "CENTER" },
     transformOrigin: { horizontal: "LEFT", vertical: "CENTER" },
     marginThreshold: 16,
   });
