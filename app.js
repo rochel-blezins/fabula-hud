@@ -3,12 +3,12 @@ import OBR from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
 const METADATA_KEY = "fabula-ultima-hud/party";
 const TOKEN_LINK_KEY = "fabula-ultima-hud/linked-char-id";
 const CLOCK_META_KEY = "fabula-ultima-hud/clock-data";
+const CLOCK_PART_KEY = "fabula-ultima-hud/clock-part";
 const POPOVER_ID = "fabula-ultima-hud/token-popover";
 const CLOSE_EVENT = "fabula-ultima-hud/popover-closed";
 const BASE_URL = "https://rochel-blezins.github.io/fabula-hud/index.html";
 const DEFAULT_AVATAR = "https://placehold.co/150x180/101b3d/e2c07d?text=Hero";
 
-// Detecta se está no modo janela individual de token (?charId=...)
 const urlParams = new URLSearchParams(window.location.search);
 const focusedCharId = urlParams.get("charId");
 
@@ -43,7 +43,6 @@ OBR.onReady(async () => {
   partyData = metadata[METADATA_KEY] || [];
   renderParty();
 
-  // Sincronização em tempo real dos personagens
   OBR.room.onMetadataChange((newMetadata) => {
     partyData = newMetadata[METADATA_KEY] || [];
     renderParty();
@@ -61,14 +60,14 @@ OBR.onReady(async () => {
 });
 
 /* ==========================================================================
-   SISTEMA DE RELÓGIOS (CLOCKS) ARRASTÁVEIS NO MAPA
+   SISTEMA DE RELÓGIOS (CLOCKS) VETORIAIS NATIVOS NO MAPA
    ========================================================================== */
 
-// Gera o SVG do relógio estilo JRPG (círculo dividido + placa com título)
-function buildClockSvgDataUrl(title, current, total, fillColor) {
-  const cx = 130;
-  const cy = 110;
-  const r = 82;
+// Miniatura SVG apenas para exibir na lista lateral da HUD
+function buildMiniClockSvg(current, total, fillColor) {
+  const cx = 30;
+  const cy = 30;
+  const r = 24;
   let slicesSvg = "";
 
   for (let i = 0; i < total; i++) {
@@ -83,51 +82,56 @@ function buildClockSvgDataUrl(title, current, total, fillColor) {
     const y2 = cy + r * Math.sin(endRad);
 
     const largeArc = 360 / total > 180 ? 1 : 0;
-    const isFilled = i < current;
-    const sliceFill = isFilled ? fillColor : "#081230";
+    const sliceFill = i < current ? fillColor : "#081230";
 
-    const d = `M ${cx} ${cy} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
-    slicesSvg += `<path d="${d}" fill="${sliceFill}" stroke="#e2c07d" stroke-width="3" />`;
+    const d = `M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`;
+    slicesSvg += `<path d="${d}" fill="${sliceFill}" stroke="#e2c07d" stroke-width="1.5" />`;
   }
 
-  const safeTitle = title
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">
-      <defs>
-        <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.75"/>
-        </filter>
-      </defs>
-      <g filter="url(#shadow)">
-        <circle cx="${cx}" cy="${cy}" r="${r + 7}" fill="#050b21" stroke="#e2c07d" stroke-width="4"/>
-        ${slicesSvg}
-        <circle cx="${cx}" cy="${cy}" r="12" fill="#050b21" stroke="#e2c07d" stroke-width="3"/>
-        <rect x="14" y="206" width="232" height="44" rx="8" fill="#081438" stroke="#e2c07d" stroke-width="3"/>
-        <text x="130" y="225" fill="#ffffff" font-family="sans-serif" font-weight="bold" font-size="14" text-anchor="middle">${safeTitle}</text>
-        <text x="130" y="242" fill="#e2c07d" font-family="sans-serif" font-weight="bold" font-size="13" text-anchor="middle">${current} / ${total}</text>
-      </g>
-    </svg>
-  `.trim();
-
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><circle cx="30" cy="30" r="26" fill="#050b21" stroke="#e2c07d" stroke-width="2"/>${slicesSvg}</svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+// Constrói os comandos SVG Path para desenhar as fatias no item nativo do Owlbear
+function buildSliceCommands(cx, cy, r, total, startIndex, endIndex) {
+  const cmds = [];
+  for (let i = startIndex; i < endIndex; i++) {
+    const startAngle = (i * 360) / total - 90;
+    const endAngle = ((i + 1) * 360) / total - 90;
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+
+    const x1 = cx + r * Math.cos(startRad);
+    const y1 = cy + r * Math.sin(startRad);
+    const x2 = cx + r * Math.cos(endRad);
+    const y2 = cy + r * Math.sin(endRad);
+
+    const largeArc = 360 / total > 180 ? 1 : 0;
+    // Comando Path nativo do Owlbear Rodeo: [0=MOVE, 1=LINE, 3=ARC, 4=CLOSE]
+    cmds.push([0, cx, cy]);
+    cmds.push([1, x1, y1]);
+    cmds.push([3, r, r, 0, largeArc, 1, x2, y2]);
+    cmds.push([4]);
+  }
+  return cmds;
 }
 
 // Monitora todos os relógios existentes na cena atual
 async function setupClockSync() {
   const isReady = await OBR.scene.isReady();
   if (isReady) {
-    const items = await OBR.scene.items.getItems((item) => Boolean(item.metadata?.[CLOCK_META_KEY]));
+    const items = await OBR.scene.items.getItems(
+      (item) => item.metadata?.[CLOCK_PART_KEY] === "BASE"
+    );
     sceneClocks = items;
     renderClocks();
   }
 
   OBR.scene.onReadyChange(async (ready) => {
     if (ready) {
-      const items = await OBR.scene.items.getItems((item) => Boolean(item.metadata?.[CLOCK_META_KEY]));
+      const items = await OBR.scene.items.getItems(
+        (item) => item.metadata?.[CLOCK_PART_KEY] === "BASE"
+      );
       sceneClocks = items;
       renderClocks();
     } else {
@@ -137,12 +141,12 @@ async function setupClockSync() {
   });
 
   OBR.scene.items.onChange((items) => {
-    sceneClocks = items.filter((item) => Boolean(item.metadata?.[CLOCK_META_KEY]));
+    sceneClocks = items.filter((item) => item.metadata?.[CLOCK_PART_KEY] === "BASE");
     renderClocks();
   });
 }
 
-// Cria um novo Clock como item arrastável no centro da visão atual do mapa
+// Cria um Clock composto por formas nativas agrupadas (arrastável no mapa)
 async function createMapClock(title, total, color) {
   const ready = await OBR.scene.isReady();
   if (!ready) {
@@ -154,91 +158,175 @@ async function createMapClock(title, total, color) {
   const viewportHeight = await OBR.viewport.getHeight();
   const scale = await OBR.viewport.getScale();
   const pos = await OBR.viewport.getPosition();
+  const playerId = await OBR.player.getId();
 
-  const offset = (sceneClocks.length % 4) * 35;
+  const offset = (sceneClocks.length % 4) * 40;
   const worldX = (viewportWidth / 2 - pos.x) / scale + offset;
   const worldY = (viewportHeight / 2 - pos.y) / scale + offset;
 
-  const svgUrl = buildClockSvgDataUrl(title, 0, total, color);
-  const playerId = await OBR.player.getId();
+  const baseId = crypto.randomUUID();
+  const fillId = crypto.randomUUID();
+  const labelId = crypto.randomUUID();
+  const r = 75;
+  const now = new Date().toISOString();
 
-  const clockItem = {
-    id: crypto.randomUUID(),
-    type: "IMAGE",
-    name: `Clock: ${title}`,
-    position: { x: worldX, y: worldY },
+  const baseProps = {
     rotation: 0,
     scale: { x: 1, y: 1 },
     visible: true,
     locked: false,
     layer: "PROP",
-    zIndex: Date.now(),
     createdUserId: playerId,
-    lastModified: new Date().toISOString(),
+    lastModified: now,
     lastModifiedUserId: playerId,
-    image: {
-      url: svgUrl,
-      width: 260,
-      height: 260,
-      mime: "image/svg+xml",
+  };
+
+  // 1. Base circular azul escura com borda dourada e todas as fatias vazias
+  const baseShape = {
+    ...baseProps,
+    id: baseId,
+    type: "PATH",
+    name: `Clock: ${title}`,
+    position: { x: worldX, y: worldY },
+    zIndex: Date.now(),
+    commands: buildSliceCommands(0, 0, r, total, 0, total),
+    fillRule: "NONZERO",
+    style: {
+      fillColor: "#081230",
+      fillOpacity: 0.95,
+      strokeColor: "#e2c07d",
+      strokeOpacity: 1,
+      strokeWidth: 4,
+      strokeDash: [],
     },
-    grid: {
-      dpi: 150,
-      offset: { x: 130, y: 130 },
-    },
-    text: {
-      richText: [],
-      plainText: "",
-      style: {
-        fillColor: "#ffffff",
-        fillOpacity: 1,
-        strokeColor: "#000000",
-        strokeOpacity: 1,
-        strokeWidth: 0,
-        textAlign: "CENTER",
-        textAlignVertical: "MIDDLE",
-        fontFamily: "Roboto",
-        fontSize: 16,
-        fontWeight: 400,
-        lineHeight: 1.2,
-        padding: 8,
-      },
-      type: "PLAIN",
-      width: 260,
-      height: 260,
-    },
-    textItemType: "LABEL",
     metadata: {
+      [CLOCK_PART_KEY]: "BASE",
       [CLOCK_META_KEY]: {
         title,
         current: 0,
         total,
         color,
+        fillId,
+        labelId,
       },
     },
   };
 
-  await OBR.scene.items.addItems([clockItem]);
-  await OBR.notification.show(`Relógio "${title}" adicionado ao mapa! Arraste para posicionar.`, "SUCCESS");
+  // 2. Fatias preenchidas (anexadas à base para mover junto)
+  const fillShape = {
+    ...baseProps,
+    id: fillId,
+    type: "PATH",
+    name: `Clock Fill: ${title}`,
+    position: { x: worldX, y: worldY },
+    attachedTo: baseId,
+    disableAttachmentBehavior: ["ROTATION"],
+    zIndex: Date.now() + 1,
+    commands: [],
+    fillRule: "NONZERO",
+    style: {
+      fillColor: color,
+      fillOpacity: 1,
+      strokeColor: "#e2c07d",
+      strokeOpacity: 1,
+      strokeWidth: 4,
+      strokeDash: [],
+    },
+    metadata: {
+      [CLOCK_PART_KEY]: "FILL",
+      parentClockId: baseId,
+    },
+  };
+
+  // 3. Placa de texto abaixo do relógio (anexada à base para mover junto)
+  const labelItem = {
+    ...baseProps,
+    id: labelId,
+    type: "TEXT",
+    name: `Clock Label: ${title}`,
+    position: { x: worldX - 110, y: worldY + r + 10 },
+    attachedTo: baseId,
+    disableAttachmentBehavior: ["ROTATION"],
+    zIndex: Date.now() + 2,
+    text: {
+      richText: [
+        {
+          type: "paragraph",
+          children: [{ text: `${title} (0/${total})` }],
+        },
+      ],
+      plainText: `${title} (0/${total})`,
+      style: {
+        fillColor: "#ffffff",
+        fillOpacity: 1,
+        strokeColor: "#050b21",
+        strokeOpacity: 1,
+        strokeWidth: 4,
+        textAlign: "CENTER",
+        textAlignVertical: "TOP",
+        fontFamily: "Cinzel",
+        fontSize: 18,
+        fontWeight: 700,
+        lineHeight: 1.2,
+        padding: 4,
+      },
+      type: "PLAIN",
+      width: 220,
+      height: 60,
+    },
+    metadata: {
+      [CLOCK_PART_KEY]: "LABEL",
+      parentClockId: baseId,
+    },
+  };
+
+  await OBR.scene.items.addItems([baseShape, fillShape, labelItem]);
+  await OBR.notification.show(`Relógio "${title}" criado no mapa!`, "SUCCESS");
 }
 
 // Avança ou retrocede segmentos de um Clock específico
-window.adjustClock = async (itemId, delta) => {
-  await OBR.scene.items.updateItems([itemId], (items) => {
-    for (let item of items) {
-      const data = item.metadata[CLOCK_META_KEY];
-      if (!data) continue;
+window.adjustClock = async (baseId, delta) => {
+  const baseItems = await OBR.scene.items.getItems([baseId]);
+  if (baseItems.length === 0) return;
 
-      const nextVal = Math.max(0, Math.min(data.total, data.current + delta));
-      data.current = nextVal;
-      item.image.url = buildClockSvgDataUrl(data.title, nextVal, data.total, data.color);
+  const baseItem = baseItems[0];
+  const data = baseItem.metadata?.[CLOCK_META_KEY];
+  if (!data) return;
+
+  const nextVal = Math.max(0, Math.min(data.total, data.current + delta));
+  const r = 75;
+  const newLabelText = `${data.title} (${nextVal}/${data.total})`;
+
+  await OBR.scene.items.updateItems(
+    [baseId, data.fillId, data.labelId],
+    (items) => {
+      for (const item of items) {
+        if (item.id === baseId) {
+          item.metadata[CLOCK_META_KEY].current = nextVal;
+        } else if (item.id === data.fillId) {
+          item.commands = buildSliceCommands(0, 0, r, data.total, 0, nextVal);
+        } else if (item.id === data.labelId) {
+          item.text.plainText = newLabelText;
+          item.text.richText = [
+            { type: "paragraph", children: [{ text: newLabelText }] },
+          ];
+        }
+      }
     }
-  });
+  );
 };
 
-// Remove um Clock do mapa
-window.deleteClock = async (itemId) => {
-  await OBR.scene.items.deleteItems([itemId]);
+// Remove um Clock inteiro do mapa (base, preenchimento e texto)
+window.deleteClock = async (baseId) => {
+  const baseItems = await OBR.scene.items.getItems([baseId]);
+  if (baseItems.length === 0) return;
+
+  const data = baseItems[0].metadata?.[CLOCK_META_KEY];
+  const idsToDelete = [baseId];
+  if (data?.fillId) idsToDelete.push(data.fillId);
+  if (data?.labelId) idsToDelete.push(data.labelId);
+
+  await OBR.scene.items.deleteItems(idsToDelete);
 };
 
 // Renderiza a lista de Clocks ativos na HUD principal
@@ -253,7 +341,7 @@ function renderClocks() {
   clocksListEl.innerHTML = sceneClocks
     .map((item) => {
       const data = item.metadata[CLOCK_META_KEY];
-      const miniSvg = buildClockSvgDataUrl("", data.current, data.total, data.color);
+      const miniSvg = buildMiniClockSvg(data.current, data.total, data.color);
 
       return `
         <div class="clock-item-row">
@@ -300,7 +388,6 @@ clockForm.addEventListener("submit", async (e) => {
    ========================================================================== */
 
 function setupContextMenus() {
-  // 1. Abrir manualmente a janela JRPG do token
   OBR.contextMenu.create({
     id: "fabula-ultima-hud/open-status",
     icons: [
@@ -324,7 +411,6 @@ function setupContextMenus() {
     },
   });
 
-  // 2. Vincular o token a um herói da party
   OBR.contextMenu.create({
     id: "fabula-ultima-hud/link-hero",
     icons: [
@@ -342,7 +428,7 @@ function setupContextMenus() {
     },
   });
 
-  // 3. Avançar +1 Segmento direto ao clicar no Relógio no mapa
+  // +1 Segmento ao clicar em qualquer parte do Clock no mapa
   OBR.contextMenu.create({
     id: "fabula-ultima-hud/clock-plus",
     icons: [
@@ -350,18 +436,19 @@ function setupContextMenus() {
         icon: "https://api.iconify.design/mdi:clock-plus-outline.svg?color=%23e2c07d",
         label: "+1 Segmento",
         filter: {
-          every: [{ key: ["metadata", CLOCK_META_KEY], operator: "!=", value: undefined }],
+          every: [{ key: ["metadata", CLOCK_PART_KEY], operator: "!=", value: undefined }],
         },
       },
     ],
     onClick(context) {
       for (const item of context.items) {
-        adjustClock(item.id, 1);
+        const targetId = item.metadata.parentClockId || item.id;
+        adjustClock(targetId, 1);
       }
     },
   });
 
-  // 4. Voltar -1 Segmento direto ao clicar no Relógio no mapa
+  // -1 Segmento ao clicar em qualquer parte do Clock no mapa
   OBR.contextMenu.create({
     id: "fabula-ultima-hud/clock-minus",
     icons: [
@@ -369,13 +456,14 @@ function setupContextMenus() {
         icon: "https://api.iconify.design/mdi:clock-minus-outline.svg?color=%23e2c07d",
         label: "-1 Segmento",
         filter: {
-          every: [{ key: ["metadata", CLOCK_META_KEY], operator: "!=", value: undefined }],
+          every: [{ key: ["metadata", CLOCK_PART_KEY], operator: "!=", value: undefined }],
         },
       },
     ],
     onClick(context) {
       for (const item of context.items) {
-        adjustClock(item.id, -1);
+        const targetId = item.metadata.parentClockId || item.id;
+        adjustClock(targetId, -1);
       }
     },
   });
@@ -410,7 +498,7 @@ async function openTokenPopover(token, charId) {
 
   await OBR.popover.open({
     id: POPOVER_ID,
-    url: `${BASE_URL}?charId=${charId}&v=4`,
+    url: `${BASE_URL}?charId=${charId}&v=5`,
     height: 155,
     width: 365,
     disableClickAway: true,
