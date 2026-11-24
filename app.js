@@ -3,6 +3,7 @@ import OBR from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
 const METADATA_KEY = "fabula-ultima-hud/party";
 const TOKEN_LINK_KEY = "fabula-ultima-hud/linked-char-id";
 const POPOVER_ID = "fabula-ultima-hud/token-popover";
+const CLOSE_EVENT = "fabula-ultima-hud/popover-closed";
 const BASE_URL = "https://rochel-blezins.github.io/fabula-hud/index.html";
 const DEFAULT_AVATAR = "https://placehold.co/150x180/101b3d/e2c07d?text=Hero";
 
@@ -44,6 +45,11 @@ OBR.onReady(async () => {
   if (!focusedCharId) {
     setupContextMenus();
     setupSelectionListener();
+
+    // Limpa o ID aberto quando o usuário clicar no "✕" da janela flutuante
+    OBR.broadcast.onMessage(CLOSE_EVENT, () => {
+      currentOpenCharId = null;
+    });
   }
 });
 
@@ -119,7 +125,7 @@ async function openTokenPopover(token, charId) {
 
   await OBR.popover.open({
     id: POPOVER_ID,
-    url: `${BASE_URL}?charId=${charId}`,
+    url: `${BASE_URL}?charId=${charId}&v=2`,
     height: 155,
     width: 365,
     disableClickAway: true,
@@ -133,8 +139,9 @@ async function openTokenPopover(token, charId) {
   });
 }
 
-// Fecha a janela flutuante pelo botão "✕"
+// Fecha a janela flutuante pelo botão "✕" e avisa a HUD principal
 window.closeTokenPopover = async () => {
+  await OBR.broadcast.sendMessage(CLOSE_EVENT, {}, { destination: "LOCAL" });
   await OBR.popover.close(POPOVER_ID);
 };
 
