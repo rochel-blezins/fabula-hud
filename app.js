@@ -1,4 +1,4 @@
-import OBR, { buildImage } from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
+import OBR from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
 
 const METADATA_KEY = "fabula-ultima-hud/party";
 const TOKEN_LINK_KEY = "fabula-ultima-hud/linked-char-id";
@@ -150,40 +150,73 @@ async function createMapClock(title, total, color) {
     return;
   }
 
-  // Calcula o centro atual da câmera para o relógio nascer visível na tela
   const viewportWidth = await OBR.viewport.getWidth();
   const viewportHeight = await OBR.viewport.getHeight();
   const scale = await OBR.viewport.getScale();
   const pos = await OBR.viewport.getPosition();
 
-  // Adiciona um pequeno deslocamento aleatório para vários relógios não nascerem exatamente um sobre o outro
   const offset = (sceneClocks.length % 4) * 35;
   const worldX = (viewportWidth / 2 - pos.x) / scale + offset;
   const worldY = (viewportHeight / 2 - pos.y) / scale + offset;
 
   const svgUrl = buildClockSvgDataUrl(title, 0, total, color);
+  const playerId = await OBR.player.getId();
 
-  const clockItem = buildImage(
-    {
+  const clockItem = {
+    id: crypto.randomUUID(),
+    type: "IMAGE",
+    name: `Clock: ${title}`,
+    position: { x: worldX, y: worldY },
+    rotation: 0,
+    scale: { x: 1, y: 1 },
+    visible: true,
+    locked: false,
+    layer: "PROP",
+    zIndex: Date.now(),
+    createdUserId: playerId,
+    lastModified: new Date().toISOString(),
+    lastModifiedUserId: playerId,
+    image: {
       url: svgUrl,
       width: 260,
       height: 260,
       mime: "image/svg+xml",
     },
-    { dpi: 150, offset: { x: 130, y: 130 } }
-  )
-    .position({ x: worldX, y: worldY })
-    .layer("PROP")
-    .name(`Clock: ${title}`)
-    .metadata({
+    grid: {
+      dpi: 150,
+      offset: { x: 130, y: 130 },
+    },
+    text: {
+      richText: [],
+      plainText: "",
+      style: {
+        fillColor: "#ffffff",
+        fillOpacity: 1,
+        strokeColor: "#000000",
+        strokeOpacity: 1,
+        strokeWidth: 0,
+        textAlign: "CENTER",
+        textAlignVertical: "MIDDLE",
+        fontFamily: "Roboto",
+        fontSize: 16,
+        fontWeight: 400,
+        lineHeight: 1.2,
+        padding: 8,
+      },
+      type: "PLAIN",
+      width: 260,
+      height: 260,
+    },
+    textItemType: "LABEL",
+    metadata: {
       [CLOCK_META_KEY]: {
         title,
         current: 0,
         total,
         color,
       },
-    })
-    .build();
+    },
+  };
 
   await OBR.scene.items.addItems([clockItem]);
   await OBR.notification.show(`Relógio "${title}" adicionado ao mapa! Arraste para posicionar.`, "SUCCESS");
@@ -377,7 +410,7 @@ async function openTokenPopover(token, charId) {
 
   await OBR.popover.open({
     id: POPOVER_ID,
-    url: `${BASE_URL}?charId=${charId}&v=2`,
+    url: `${BASE_URL}?charId=${charId}&v=4`,
     height: 155,
     width: 365,
     disableClickAway: true,
