@@ -313,9 +313,12 @@ function renderParty() {
               </div>
               <div class="card-controls">
                 <button class="icon-btn" onclick="editChar('${c.id}')" title="Editar">✎</button>
-                ${!focusedCharId ? `<button class="icon-btn" onclick="deleteChar('${c.id}')" title="Remover">✕</button>` : ""}
+                ${
+                  focusedCharId
+                    ? `<button class="icon-btn" onclick="closeTokenPopover()" title="Fechar janela">✕</button>`
+                    : `<button class="icon-btn" onclick="deleteChar('${c.id}')" title="Remover">✕</button>`
+                }
               </div>
-            </div>
 
             <div class="bar-row">
               <div class="bar-label">
