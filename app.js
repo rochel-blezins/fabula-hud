@@ -1,0 +1,223 @@
+import OBR from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
+
+const METADATA_KEY = "fabula-ultima-hud/party";
+const DEFAULT_AVATAR = "https://placehold.co/150x180/101b3d/e2c07d?text=Hero";
+
+let partyData = [];
+
+// Elementos DOM
+const partyListEl = document.getElementById("party-list");
+const modal = document.getElementById("char-modal");
+const form = document.getElementById("char-form");
+const btnAdd = document.getElementById("btn-add-char");
+const btnCancel = document.getElementById("btn-cancel");
+
+// Inicializa quando o Owlbear estiver pronto
+OBR.onReady(async () => {
+  const metadata = await OBR.room.getMetadata();
+  partyData = metadata[METADATA_KEY] || [];
+  renderParty();
+
+  // Escuta alterações feitas por outros jogadores na sala
+  OBR.room.onMetadataChange((newMetadata) => {
+    partyData = newMetadata[METADATA_KEY] || [];
+    renderParty();
+  });
+});
+
+// Salva o estado atualizado na sala do Owlbear
+async function saveParty(newParty) {
+  partyData = newParty;
+  renderParty(); // Atualização otimista na UI local
+  await OBR.room.setMetadata({
+    [METADATA_KEY]: newParty,
+  });
+}
+
+// Altera valores rápidos (+1 / -1 ou +5 / -5)
+window.adjustStat = (id, field, delta) => {
+  const updated = partyData.map((char) => {
+    if (char.id !== id) return char;
+    let newVal = (char[field] || 0) + delta;
+
+    // Limites mínimos e máximos
+    if (newVal < 0) newVal = 0;
+    if (field === "hp" && newVal > char.hpMax) newVal = char.hpMax;
+    if (field === "mp" && newVal > char.mpMax) newVal = char.mpMax;
+    if (field === "ip" && newVal > char.ipMax) newVal = char.ipMax;
+
+    return { ...char, [field]: newVal };
+  });
+  saveParty(updated);
+};
+
+// Abre modal para editar
+window.editChar = (id) => {
+  const char = partyData.find((c) => c.id === id);
+  if (!char) return;
+
+  document.getElementById("modal-title").textContent = "Editar Herói";
+  document.getElementById("char-id").value = char.id;
+  document.getElementById("char-name").value = char.name;
+  document.getElementById("char-img").value = char.img || "";
+  document.getElementById("char-hp-max").value = char.hpMax;
+  document.getElementById("char-mp-max").value = char.mpMax;
+  document.getElementById("char-ip-max").value = char.ipMax;
+  document.getElementById("char-def").value = char.def;
+  document.getElementById("char-mdef").value = char.mdef;
+  document.getElementById("char-fp").value = char.fp;
+
+  modal.showModal();
+};
+
+// Remove personagem
+window.deleteChar = (id) => {
+  if (!confirm("Remover este personagem da HUD?")) return;
+  const updated = partyData.filter((c) => c.id !== id);
+  saveParty(updated);
+};
+
+// Abrir modal de novo personagem
+btnAdd.addEventListener("click", () => {
+  form.reset();
+  document.getElementById("char-id").value = "";
+  document.getElementById("modal-title").textContent = "Novo Herói";
+  modal.showModal();
+});
+
+btnCancel.addEventListener("click", () => modal.close());
+
+// Salvar formulário (Criação ou Edição)
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const id = document.getElementById("char-id").value;
+  const hpMax = parseInt(document.getElementById("char-hp-max").value, 10);
+  const mpMax = parseInt(document.getElementById("char-mp-max").value, 10);
+  const ipMax = parseInt(document.getElementById("char-ip-max").value, 10);
+
+  const charPayload = {
+    id: id || crypto.randomUUID(),
+    name: document.getElementById("char-name").value.trim(),
+    img: document.getElementById("char-img").value.trim(),
+    hpMax,
+    mpMax,
+    ipMax,
+    def: parseInt(document.getElementById("char-def").value, 10),
+    mdef: parseInt(document.getElementById("char-mdef").value, 10),
+    fp: parseInt(document.getElementById("char-fp").value, 10),
+  };
+
+  let updated;
+  if (id) {
+    updated = partyData.map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            ...charPayload,
+            hp: Math.min(c.hp, hpMax),
+            mp: Math.min(c.mp, mpMax),
+            ip: Math.min(c.ip, ipMax),
+          }
+        : c
+    );
+  } else {
+    updated = [
+      ...partyData,
+      { ...charPayload, hp: hpMax, mp: mpMax, ip: ipMax },
+    ];
+  }
+
+  saveParty(updated);
+  modal.close();
+});
+
+// Renderiza a interface JRPG
+function renderParty() {
+  if (partyData.length === 0) {
+    partyListEl.innerHTML = `<p style="text-align:center; color:#9eb0e0; font-size:0.8rem; padding:20px;">Nenhum herói na party. Clique em "+ Herói" para adicionar.</p>`;
+    return;
+  }
+
+  partyListEl.innerHTML = partyData
+    .map((c) => {
+      const hpPct = Math.max(0, Math.min(100, (c.hp / c.hpMax) * 100));
+      const mpPct = Math.max(0, Math.min(100, (c.mp / c.mpMax) * 100));
+      // Regra oficial de Fabula Ultima: Crise ativa quando PV <= metade do máximo
+      const isCrisis = c.hp <= Math.floor(c.hpMax / 2);
+
+      return `
+        <article class="char-card ${isCrisis ? "in-crisis" : ""}">
+          <div class="portrait-box">
+            <img class="portrait-img" src="${c.img || DEFAULT_AVATAR}" alt="${c.name}" onerror="this.src='${DEFAULT_AVATAR}'"/>
+            ${isCrisis ? `<span class="crisis-badge">CRISE</span>` : ""}
+          </div>
+
+          <div class="stats-box">
+            <div class="top-row">
+              <span class="char-name">${c.name}</span>
+              <div class="defenses">
+                <span class="def-tag" title="Defesa Física">DEF ${c.def}</span>
+                <span class="def-tag" title="Defesa Mágica">M.DEF ${c.mdef}</span>
+              </div>
+              <div class="card-controls">
+                <button class="icon-btn" onclick="editChar('${c.id}')" title="Editar">✎</button>
+                <button class="icon-btn" onclick="deleteChar('${c.id}')" title="Remover">✕</button>
+              </div>
+            </div>
+
+            <!-- Barra de PV -->
+            <div class="bar-row">
+              <div class="bar-label">
+                <span style="color: ${isCrisis ? "#ff6b6b" : "#2ecc71"}">PV ${c.hp} / ${c.hpMax}</span>
+                <div class="step-btns">
+                  <button onclick="adjustStat('${c.id}', 'hp', -5)">-5</button>
+                  <button onclick="adjustStat('${c.id}', 'hp', -1)">-</button>
+                  <button onclick="adjustStat('${c.id}', 'hp', 1)">+</button>
+                  <button onclick="adjustStat('${c.id}', 'hp', 5)">+5</button>
+                </div>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width: ${hpPct}%; background: ${isCrisis ? "var(--hp-crisis)" : "var(--hp-color)"};"></div>
+              </div>
+            </div>
+
+            <!-- Barra de PM -->
+            <div class="bar-row">
+              <div class="bar-label">
+                <span style="color: #5dade2">PM ${c.mp} / ${c.mpMax}</span>
+                <div class="step-btns">
+                  <button onclick="adjustStat('${c.id}', 'mp', -5)">-5</button>
+                  <button onclick="adjustStat('${c.id}', 'mp', -1)">-</button>
+                  <button onclick="adjustStat('${c.id}', 'mp', 1)">+</button>
+                  <button onclick="adjustStat('${c.id}', 'mp', 5)">+5</button>
+                </div>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width: ${mpPct}%; background: var(--mp-color);"></div>
+              </div>
+            </div>
+
+            <!-- PI e Pontos de Fabula -->
+            <div class="bottom-resources">
+              <div class="res-pill">
+                <span style="color: var(--ip-color)">PI: ${c.ip}/${c.ipMax}</span>
+                <div class="step-btns">
+                  <button onclick="adjustStat('${c.id}', 'ip', -1)">-</button>
+                  <button onclick="adjustStat('${c.id}', 'ip', 1)">+</button>
+                </div>
+              </div>
+
+              <div class="res-pill">
+                <span style="color: #d7bde2">✦ Fabula: ${c.fp}</span>
+                <div class="step-btns">
+                  <button onclick="adjustStat('${c.id}', 'fp', -1)">-</button>
+                  <button onclick="adjustStat('${c.id}', 'fp', 1)">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}

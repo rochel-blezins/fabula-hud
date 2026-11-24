@@ -1,0 +1,13 @@
+{
+  "name": "Fabula Ultima JRPG HUD",
+  "version": "1.0.0",
+  "manifest_version": 1,
+  "description": "HUD estilo JRPG para acompanhar PV, PM, PI, Defesas e Pontos de Fabula.",
+  "action": {
+    "title": "Party Status (Fabula Ultima)",
+    "icon": "/icon.svg",
+    "popover": "/",
+    "height": 600,
+    "width": 380
+  }
+}

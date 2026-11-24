@@ -1,0 +1,289 @@
+:root {
+  --bg-window: linear-gradient(180deg, #0b1942 0%, #050b21 100%);
+  --border-gold: #e2c07d;
+  --text-main: #f4f6ff;
+  --text-muted: #9eb0e0;
+  --hp-color: #2ecc71;
+  --hp-crisis: #e74c3c;
+  --mp-color: #3498db;
+  --ip-color: #f39c12;
+  --fp-color: #9b59b6;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #040817;
+  color: var(--text-main);
+  font-family: 'Nunito', sans-serif;
+  padding: 8px;
+  user-select: none;
+}
+
+.jrpg-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-window);
+  border: 2px solid var(--border-gold);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  box-shadow: inset 0 0 0 2px #1a2d6b;
+}
+
+.jrpg-header h1 {
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  letter-spacing: 1.5px;
+  color: var(--border-gold);
+}
+
+.jrpg-btn {
+  background: #1c357a;
+  color: #fff;
+  border: 1px solid var(--border-gold);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.jrpg-btn:hover {
+  background: #2b4ca8;
+}
+
+.jrpg-btn.secondary {
+  background: #2a2f45;
+  border-color: #6c789c;
+}
+
+/* Card de Personagem */
+.party-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.char-card {
+  display: flex;
+  gap: 10px;
+  background: var(--bg-window);
+  border: 2px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: inset 0 0 0 2px #16275c, 0 4px 10px rgba(0, 0, 0, 0.6);
+  position: relative;
+  transition: border-color 0.3s;
+}
+
+.char-card.in-crisis {
+  border-color: var(--hp-crisis);
+  box-shadow: inset 0 0 12px rgba(231, 76, 60, 0.35), 0 4px 10px rgba(0, 0, 0, 0.6);
+}
+
+/* Portrait Lateral */
+.portrait-box {
+  width: 76px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.portrait-img {
+  width: 76px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-gold);
+  background: #101b3d;
+}
+
+.crisis-badge {
+  background: var(--hp-crisis);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Status e Barras */
+.stats-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.char-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.defenses {
+  display: flex;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.def-tag {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(226, 192, 125, 0.4);
+}
+
+.card-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.icon-btn:hover { color: #fff; }
+
+/* Barras de Recursos */
+.bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.step-btns button {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  font-weight: 800;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.step-btns button:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.bar-track {
+  width: 100%;
+  height: 7px;
+  background: #030714;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.bar-fill {
+  height: 100%;
+  transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+/* Rodapé do Card: PI e Pontos de Fabula */
+.bottom-resources {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.res-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Modal */
+.jrpg-modal {
+  background: #0b1942;
+  color: #fff;
+  border: 2px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 14px;
+  width: 90%;
+  max-width: 340px;
+  margin: auto;
+}
+
+.jrpg-modal::backdrop {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.jrpg-modal h2 {
+  font-family: 'Cinzel', serif;
+  color: var(--border-gold);
+  font-size: 1rem;
+  margin-bottom: 10px;
+}
+
+.jrpg-modal label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  gap: 3px;
+}
+
+.jrpg-modal input {
+  background: #050b21;
+  border: 1px solid #3c5496;
+  color: #fff;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-family: 'Nunito', sans-serif;
+}
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}

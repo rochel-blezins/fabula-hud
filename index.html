@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fabula Ultima HUD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="hud-container">
+    <header class="jrpg-header">
+      <h1>PARTY STATUS</h1>
+      <button id="btn-add-char" class="jrpg-btn" title="Adicionar Personagem">+ Herói</button>
+    </header>
+
+    <!-- Lista onde os cards dos jogadores vão aparecer -->
+    <main id="party-list" class="party-list"></main>
+  </div>
+
+  <!-- Modal simples para criar/editar personagem -->
+  <dialog id="char-modal" class="jrpg-modal">
+    <form id="char-form" method="dialog">
+      <h2 id="modal-title">Novo Herói</h2>
+      <input type="hidden" id="char-id" />
+      
+      <label>Nome do Personagem
+        <input type="text" id="char-name" required placeholder="Ex: Blair" />
+      </label>
+
+      <label>URL do Portrait (Imagem)
+        <input type="url" id="char-img" placeholder="https://..." />
+      </label>
+
+      <div class="grid-2">
+        <label>PV Máximo
+          <input type="number" id="char-hp-max" value="50" min="1" required />
+        </label>
+        <label>PM Máximo
+          <input type="number" id="char-mp-max" value="50" min="1" required />
+        </label>
+      </div>
+
+      <div class="grid-3">
+        <label>PI Máx
+          <input type="number" id="char-ip-max" value="6" min="1" required />
+        </label>
+        <label>DEF Física
+          <input type="number" id="char-def" value="10" required />
+        </label>
+        <label>DEF Mágica
+          <input type="number" id="char-mdef" value="10" required />
+        </label>
+      </div>
+
+      <label>Pontos de Fabula Iniciais
+        <input type="number" id="char-fp" value="3" min="0" required />
+      </label>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-cancel" class="jrpg-btn secondary">Cancelar</button>
+        <button type="submit" class="jrpg-btn">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- SDK Oficial do Owlbear Rodeo via ES Module -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
