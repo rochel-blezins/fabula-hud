@@ -10,16 +10,16 @@
 </head>
 <body>
   <div class="hud-container">
-    <header class="jrpg-header">
+    <header id="main-header" class="jrpg-header">
       <h1>PARTY STATUS</h1>
       <button id="btn-add-char" class="jrpg-btn" title="Adicionar Personagem">+ Herói</button>
     </header>
 
-    <!-- Lista onde os cards dos jogadores vão aparecer -->
+    <!-- Lista de personagens (ou card único no modo Token) -->
     <main id="party-list" class="party-list"></main>
   </div>
 
-  <!-- Modal simples para criar/editar personagem -->
+  <!-- Modal para criar/editar personagem -->
   <dialog id="char-modal" class="jrpg-modal">
     <form id="char-form" method="dialog">
       <h2 id="modal-title">Novo Herói</h2>
@@ -64,6 +64,25 @@
       </div>
     </form>
   </dialog>
+
+  <!-- Modal para vincular Token a um Herói -->
+  <dialog id="link-modal" class="jrpg-modal">
+    <form id="link-form" method="dialog">
+      <h2>Vincular Token ao Herói</h2>
+      <input type="hidden" id="target-token-id" />
+      <label>Selecione o personagem deste token:
+        <select id="hero-select" required></select>
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="btn-cancel-link" class="jrpg-btn secondary">Cancelar</button>
+        <button type="submit" class="jrpg-btn">Vincular</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
 
   <!-- SDK Oficial do Owlbear Rodeo via ES Module -->
   <script type="module" src="app.js"></script>
