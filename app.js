@@ -113,11 +113,11 @@ async function openTokenPopover(token, charId) {
   await OBR.popover.open({
     id: POPOVER_ID,
     url: `${BASE_URL}?charId=${charId}`,
-    height: 175,
+    height: 155,
     width: 365,
-    anchorElementId: token.id,
-    anchorOrigin: { horizontal: "RIGHT", vertical: "TOP" },
-    transformOrigin: { horizontal: "LEFT", vertical: "TOP" },
+    anchorItemId: token.id,
+    anchorOrigin: { horizontal: "RIGHT", vertical: "CENTER" },
+    transformOrigin: { horizontal: "LEFT", vertical: "CENTER" },
     marginThreshold: 16,
   });
 }
