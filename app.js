@@ -1,7 +1,8 @@
-import OBR from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
+import OBR, { buildImage } from "https://esm.sh/@owlbear-rodeo/sdk@3.0.0";
 
 const METADATA_KEY = "fabula-ultima-hud/party";
 const TOKEN_LINK_KEY = "fabula-ultima-hud/linked-char-id";
+const CLOCK_META_KEY = "fabula-ultima-hud/clock-data";
 const POPOVER_ID = "fabula-ultima-hud/token-popover";
 const CLOSE_EVENT = "fabula-ultima-hud/popover-closed";
 const BASE_URL = "https://rochel-blezins.github.io/fabula-hud/index.html";
@@ -16,10 +17,12 @@ if (focusedCharId) {
 }
 
 let partyData = [];
+let sceneClocks = [];
 let currentOpenCharId = null;
 
 // Elementos DOM
 const partyListEl = document.getElementById("party-list");
+const clocksListEl = document.getElementById("clocks-list");
 const modal = document.getElementById("char-modal");
 const form = document.getElementById("char-form");
 const btnAdd = document.getElementById("btn-add-char");
@@ -30,30 +33,239 @@ const linkForm = document.getElementById("link-form");
 const heroSelect = document.getElementById("hero-select");
 const btnCancelLink = document.getElementById("btn-cancel-link");
 
+const clockModal = document.getElementById("clock-modal");
+const clockForm = document.getElementById("clock-form");
+const btnAddClock = document.getElementById("btn-add-clock");
+const btnCancelClock = document.getElementById("btn-cancel-clock");
+
 OBR.onReady(async () => {
   const metadata = await OBR.room.getMetadata();
   partyData = metadata[METADATA_KEY] || [];
   renderParty();
 
-  // Sincronização em tempo real entre a HUD Geral e a Janela Flutuante
+  // Sincronização em tempo real dos personagens
   OBR.room.onMetadataChange((newMetadata) => {
     partyData = newMetadata[METADATA_KEY] || [];
     renderParty();
   });
 
-  // Registra os menus e listeners apenas na instância principal
   if (!focusedCharId) {
     setupContextMenus();
     setupSelectionListener();
+    setupClockSync();
 
-    // Limpa o ID aberto quando o usuário clicar no "✕" da janela flutuante
     OBR.broadcast.onMessage(CLOSE_EVENT, () => {
       currentOpenCharId = null;
     });
   }
 });
 
-// Cria os botões no menu de contexto dos tokens
+/* ==========================================================================
+   SISTEMA DE RELÓGIOS (CLOCKS) ARRASTÁVEIS NO MAPA
+   ========================================================================== */
+
+// Gera o SVG do relógio estilo JRPG (círculo dividido + placa com título)
+function buildClockSvgDataUrl(title, current, total, fillColor) {
+  const cx = 130;
+  const cy = 110;
+  const r = 82;
+  let slicesSvg = "";
+
+  for (let i = 0; i < total; i++) {
+    const startAngle = (i * 360) / total - 90;
+    const endAngle = ((i + 1) * 360) / total - 90;
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+
+    const x1 = cx + r * Math.cos(startRad);
+    const y1 = cy + r * Math.sin(startRad);
+    const x2 = cx + r * Math.cos(endRad);
+    const y2 = cy + r * Math.sin(endRad);
+
+    const largeArc = 360 / total > 180 ? 1 : 0;
+    const isFilled = i < current;
+    const sliceFill = isFilled ? fillColor : "#081230";
+
+    const d = `M ${cx} ${cy} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+    slicesSvg += `<path d="${d}" fill="${sliceFill}" stroke="#e2c07d" stroke-width="3" />`;
+  }
+
+  const safeTitle = title
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">
+      <defs>
+        <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.75"/>
+        </filter>
+      </defs>
+      <g filter="url(#shadow)">
+        <circle cx="${cx}" cy="${cy}" r="${r + 7}" fill="#050b21" stroke="#e2c07d" stroke-width="4"/>
+        ${slicesSvg}
+        <circle cx="${cx}" cy="${cy}" r="12" fill="#050b21" stroke="#e2c07d" stroke-width="3"/>
+        <rect x="14" y="206" width="232" height="44" rx="8" fill="#081438" stroke="#e2c07d" stroke-width="3"/>
+        <text x="130" y="225" fill="#ffffff" font-family="sans-serif" font-weight="bold" font-size="14" text-anchor="middle">${safeTitle}</text>
+        <text x="130" y="242" fill="#e2c07d" font-family="sans-serif" font-weight="bold" font-size="13" text-anchor="middle">${current} / ${total}</text>
+      </g>
+    </svg>
+  `.trim();
+
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+// Monitora todos os relógios existentes na cena atual
+async function setupClockSync() {
+  const isReady = await OBR.scene.isReady();
+  if (isReady) {
+    const items = await OBR.scene.items.getItems((item) => Boolean(item.metadata?.[CLOCK_META_KEY]));
+    sceneClocks = items;
+    renderClocks();
+  }
+
+  OBR.scene.onReadyChange(async (ready) => {
+    if (ready) {
+      const items = await OBR.scene.items.getItems((item) => Boolean(item.metadata?.[CLOCK_META_KEY]));
+      sceneClocks = items;
+      renderClocks();
+    } else {
+      sceneClocks = [];
+      renderClocks();
+    }
+  });
+
+  OBR.scene.items.onChange((items) => {
+    sceneClocks = items.filter((item) => Boolean(item.metadata?.[CLOCK_META_KEY]));
+    renderClocks();
+  });
+}
+
+// Cria um novo Clock como item arrastável no centro da visão atual do mapa
+async function createMapClock(title, total, color) {
+  const ready = await OBR.scene.isReady();
+  if (!ready) {
+    await OBR.notification.show("Abra um mapa/cena antes de criar um Relógio!", "WARNING");
+    return;
+  }
+
+  // Calcula o centro atual da câmera para o relógio nascer visível na tela
+  const viewportWidth = await OBR.viewport.getWidth();
+  const viewportHeight = await OBR.viewport.getHeight();
+  const scale = await OBR.viewport.getScale();
+  const pos = await OBR.viewport.getPosition();
+
+  // Adiciona um pequeno deslocamento aleatório para vários relógios não nascerem exatamente um sobre o outro
+  const offset = (sceneClocks.length % 4) * 35;
+  const worldX = (viewportWidth / 2 - pos.x) / scale + offset;
+  const worldY = (viewportHeight / 2 - pos.y) / scale + offset;
+
+  const svgUrl = buildClockSvgDataUrl(title, 0, total, color);
+
+  const clockItem = buildImage(
+    {
+      url: svgUrl,
+      width: 260,
+      height: 260,
+      mime: "image/svg+xml",
+    },
+    { dpi: 150, offset: { x: 130, y: 130 } }
+  )
+    .position({ x: worldX, y: worldY })
+    .layer("PROP")
+    .name(`Clock: ${title}`)
+    .metadata({
+      [CLOCK_META_KEY]: {
+        title,
+        current: 0,
+        total,
+        color,
+      },
+    })
+    .build();
+
+  await OBR.scene.items.addItems([clockItem]);
+  await OBR.notification.show(`Relógio "${title}" adicionado ao mapa! Arraste para posicionar.`, "SUCCESS");
+}
+
+// Avança ou retrocede segmentos de um Clock específico
+window.adjustClock = async (itemId, delta) => {
+  await OBR.scene.items.updateItems([itemId], (items) => {
+    for (let item of items) {
+      const data = item.metadata[CLOCK_META_KEY];
+      if (!data) continue;
+
+      const nextVal = Math.max(0, Math.min(data.total, data.current + delta));
+      data.current = nextVal;
+      item.image.url = buildClockSvgDataUrl(data.title, nextVal, data.total, data.color);
+    }
+  });
+};
+
+// Remove um Clock do mapa
+window.deleteClock = async (itemId) => {
+  await OBR.scene.items.deleteItems([itemId]);
+};
+
+// Renderiza a lista de Clocks ativos na HUD principal
+function renderClocks() {
+  if (!clocksListEl) return;
+
+  if (sceneClocks.length === 0) {
+    clocksListEl.innerHTML = `<p style="text-align:center; color:#9eb0e0; font-size:0.75rem; padding:6px;">Nenhum relógio ativo. Clique em "+ Clock" para criar.</p>`;
+    return;
+  }
+
+  clocksListEl.innerHTML = sceneClocks
+    .map((item) => {
+      const data = item.metadata[CLOCK_META_KEY];
+      const miniSvg = buildClockSvgDataUrl("", data.current, data.total, data.color);
+
+      return `
+        <div class="clock-item-row">
+          <div class="clock-info">
+            <img class="clock-mini-preview" src="${miniSvg}" alt="Clock" />
+            <div>
+              <div class="clock-title">${data.title}</div>
+              <div class="clock-count">${data.current} / ${data.total} segmentos</div>
+            </div>
+          </div>
+          <div class="card-controls">
+            <div class="step-btns">
+              <button onclick="adjustClock('${item.id}', -1)" title="-1 Segmento">-</button>
+              <button onclick="adjustClock('${item.id}', 1)" title="+1 Segmento">+</button>
+            </div>
+            <button class="icon-btn" onclick="deleteClock('${item.id}')" title="Remover Relógio">✕</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+// Eventos do Modal de Clock
+btnAddClock.addEventListener("click", () => {
+  clockForm.reset();
+  clockModal.showModal();
+});
+
+btnCancelClock.addEventListener("click", () => clockModal.close());
+
+clockForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const title = document.getElementById("clock-name").value.trim();
+  const total = parseInt(document.getElementById("clock-segments").value, 10);
+  const color = document.getElementById("clock-color").value;
+
+  clockModal.close();
+  await createMapClock(title, total, color);
+});
+
+/* ==========================================================================
+   MENUS DE CONTEXTO (TOKENS E RELÓGIOS NO MAPA)
+   ========================================================================== */
+
 function setupContextMenus() {
   // 1. Abrir manualmente a janela JRPG do token
   OBR.contextMenu.create({
@@ -96,9 +308,50 @@ function setupContextMenus() {
       openLinkModal(token);
     },
   });
+
+  // 3. Avançar +1 Segmento direto ao clicar no Relógio no mapa
+  OBR.contextMenu.create({
+    id: "fabula-ultima-hud/clock-plus",
+    icons: [
+      {
+        icon: "https://api.iconify.design/mdi:clock-plus-outline.svg?color=%23e2c07d",
+        label: "+1 Segmento",
+        filter: {
+          every: [{ key: ["metadata", CLOCK_META_KEY], operator: "!=", value: undefined }],
+        },
+      },
+    ],
+    onClick(context) {
+      for (const item of context.items) {
+        adjustClock(item.id, 1);
+      }
+    },
+  });
+
+  // 4. Voltar -1 Segmento direto ao clicar no Relógio no mapa
+  OBR.contextMenu.create({
+    id: "fabula-ultima-hud/clock-minus",
+    icons: [
+      {
+        icon: "https://api.iconify.design/mdi:clock-minus-outline.svg?color=%23e2c07d",
+        label: "-1 Segmento",
+        filter: {
+          every: [{ key: ["metadata", CLOCK_META_KEY], operator: "!=", value: undefined }],
+        },
+      },
+    ],
+    onClick(context) {
+      for (const item of context.items) {
+        adjustClock(item.id, -1);
+      }
+    },
+  });
 }
 
-// Abre a janela flutuante ao selecionar o token, sem piscar ou fechar ao movê-lo
+/* ==========================================================================
+   JANELA FLUTUANTE DE TOKEN E GERENCIAMENTO DE HERÓIS
+   ========================================================================== */
+
 function setupSelectionListener() {
   OBR.player.onChange(async (player) => {
     const selection = player.selection;
@@ -116,7 +369,6 @@ function setupSelectionListener() {
   });
 }
 
-// Abre o Popover na parte inferior central da tela sem bloquear o mapa
 async function openTokenPopover(token, charId) {
   const viewportWidth = await OBR.viewport.getWidth();
   const viewportHeight = await OBR.viewport.getHeight();
@@ -139,13 +391,11 @@ async function openTokenPopover(token, charId) {
   });
 }
 
-// Fecha a janela flutuante pelo botão "✕" e avisa a HUD principal
 window.closeTokenPopover = async () => {
   await OBR.broadcast.sendMessage(CLOSE_EVENT, {}, { destination: "LOCAL" });
   await OBR.popover.close(POPOVER_ID);
 };
 
-// Abre modal para vincular token a um personagem
 async function openLinkModal(token) {
   if (partyData.length === 0) {
     await OBR.notification.show("Crie um herói na HUD Party Status antes de vincular!", "WARNING");
@@ -178,7 +428,6 @@ linkForm.addEventListener("submit", async (e) => {
   await OBR.notification.show("Token vinculado com sucesso!", "SUCCESS");
 });
 
-// Salva estado na sala do Owlbear
 async function saveParty(newParty) {
   partyData = newParty;
   renderParty();
@@ -187,7 +436,6 @@ async function saveParty(newParty) {
   });
 }
 
-// Ajusta PV, PM, PI ou Pontos de Fabula
 window.adjustStat = (id, field, delta) => {
   const updated = partyData.map((char) => {
     if (char.id !== id) return char;
@@ -203,7 +451,6 @@ window.adjustStat = (id, field, delta) => {
   saveParty(updated);
 };
 
-// Abre modal de edição do personagem
 window.editChar = (id) => {
   const char = partyData.find((c) => c.id === id);
   if (!char) return;
@@ -222,7 +469,6 @@ window.editChar = (id) => {
   modal.showModal();
 };
 
-// Remove personagem da party
 window.deleteChar = (id) => {
   if (!confirm("Remover este personagem da HUD?")) return;
   const updated = partyData.filter((c) => c.id !== id);
@@ -281,7 +527,6 @@ form.addEventListener("submit", (e) => {
   modal.close();
 });
 
-// Renderiza a interface JRPG
 function renderParty() {
   const listToRender = focusedCharId
     ? partyData.filter((c) => c.id === focusedCharId)
